@@ -1,0 +1,32 @@
+# UMMG model registry.
+# `models` maps friendly names -> adapter name.
+# `upstream` lists the HTTP base URL each adapter forwards to.
+# `memory` controls the global memory core.
+
+models:
+  claude-opus:
+    adapter: anthropic
+  claude-sonnet:
+    adapter: anthropic
+  minimax-m3:
+    adapter: minimax
+  local-gemma4:
+    adapter: local
+
+upstream:
+  anthropic: http://127.0.0.1:8791
+  minimax:   http://127.0.0.1:8792
+  local:     http://127.0.0.1:11434/v1
+
+memory:
+  enabled: true
+  top_k: 6
+  max_context_tokens: 8000
+  summary_every_n_events: 20
+  summary_window: 30
+  summary_model: claude-sonnet
+  embedding:
+    primary_base_url: http://127.0.0.1:8791
+    primary_model: text-embedding-3-small
+    fallback: sentence-transformers
+    fallback_model: all-MiniLM-L6-v2
