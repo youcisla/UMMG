@@ -37,7 +37,7 @@ async def _main() -> int:
     payload = {
         "model": args.model,
         "messages": [{"role": "user", "content": "Reply with the single word: pong"}],
-        "max_tokens": 16,
+        "max_tokens": 256,  # reasoning models spend budget on hidden reasoning_tokens
         "temperature": 0,
     }
     try:

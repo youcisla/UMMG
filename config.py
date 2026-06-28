@@ -5,7 +5,7 @@ Exposes a single `Settings` object built once at startup.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,20 @@ ROOT = Path(__file__).resolve().parent
 ENV_PATH = ROOT / ".env"
 MODELS_PATH = ROOT / "models.yaml"
 DATA_DIR = Path(os.getenv("UMMG_DATA_DIR", str(ROOT / "data")))
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    """Per-model registry entry.
+
+    `adapter` is required. The rest are optional metadata the router uses to
+    forward the request correctly and to size injected memory per model.
+    """
+
+    adapter: str
+    native_model: str | None = None
+    context_window: int | None = None
+    default_max_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -41,7 +55,7 @@ class Settings:
     host: str
     port: int
     upstream: dict[str, str]
-    models: dict[str, str]
+    models: dict[str, ModelSpec]
     memory: MemoryConfig
     data_dir: Path
 
@@ -70,13 +84,35 @@ def _load_models_yaml() -> dict[str, Any]:
         return yaml.safe_load(fh) or {}
 
 
+def _parse_models(raw_models: dict[str, Any] | None) -> dict[str, ModelSpec]:
+    """Parse the `models:` block into ModelSpec objects.
+
+    Entries lacking an `adapter` are skipped (with no hard failure) so a
+    malformed line can't take the whole gateway down at boot.
+    """
+    out: dict[str, ModelSpec] = {}
+    for name, cfg in (raw_models or {}).items():
+        if not isinstance(cfg, dict) or "adapter" not in cfg:
+            continue
+        nm = cfg.get("native_model")
+        cw = cfg.get("context_window")
+        dmt = cfg.get("default_max_tokens")
+        out[str(name)] = ModelSpec(
+            adapter=str(cfg["adapter"]),
+            native_model=str(nm) if nm else None,
+            context_window=int(cw) if cw is not None else None,
+            default_max_tokens=int(dmt) if dmt is not None else None,
+        )
+    return out
+
+
 def load_settings() -> Settings:
     if ENV_PATH.exists():
         load_dotenv(ENV_PATH, override=False)
 
     raw = _load_models_yaml()
     upstream: dict[str, str] = {k: str(v) for k, v in (raw.get("upstream") or {}).items()}
-    models: dict[str, str] = {k: str(v["adapter"]) for k, v in (raw.get("models") or {}).items() if "adapter" in v}
+    models: dict[str, ModelSpec] = _parse_models(raw.get("models"))
 
     mem_raw = raw.get("memory") or {}
     emb = mem_raw.get("embedding") or {}

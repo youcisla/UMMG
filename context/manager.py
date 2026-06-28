@@ -86,7 +86,7 @@ class ContextManager:
             "content": "\n\n".join(sections),
         }
 
-    def truncate(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def truncate(self, payload: dict[str, Any], *, max_context_tokens: int | None = None) -> dict[str, Any]:
         """Drop oldest messages until total tokens <= max_context_tokens.
 
         Keeps: the most recent system packet (index 0), the most recent
@@ -96,7 +96,7 @@ class ContextManager:
         if not messages:
             return payload
 
-        budget = self.max_context_tokens
+        budget = max_context_tokens or self.max_context_tokens
 
         # Always keep the first message (our system packet) and the last user.
         # Drop oldest non-system messages first.

@@ -1,22 +1,68 @@
 # UMMG model registry.
-# `models` maps friendly names -> adapter name.
-# `upstream` lists the HTTP base URL each adapter forwards to.
-# `memory` controls the global memory core.
+# Each model maps to an adapter plus optional metadata used by the router:
+#   adapter            - provider adapter that handles the model (required)
+#   native_model       - exact id sent upstream (defaults to the friendly name)
+#   context_window     - max input tokens; caps memory injection per model
+#   default_max_tokens - applied ONLY when the client omits max_tokens
+#                        (reasoning models, e.g. GLM, need real headroom or they
+#                         spend the whole budget on hidden reasoning_tokens)
+# Values marked "TODO: confirm" are seeded defaults — verify against your
+# provider accounts / local model cards before relying on them.
 
 models:
+  # ---- Anthropic (via headroom 8791 -> api.anthropic.com) ----
   claude-opus:
     adapter: anthropic
+    context_window: 200000
+    default_max_tokens: 8192
   claude-sonnet:
     adapter: anthropic
+    context_window: 200000
+    default_max_tokens: 8192
+  claude-fable-5:
+    adapter: anthropic
+    native_model: claude-fable-5       # TODO: confirm exact Anthropic API id
+    context_window: 1000000            # TODO: confirm
+    default_max_tokens: 8192
+
+  # ---- Z.ai GLM Coding Plan (OpenAI-compatible /api/coding/paas/v4) ----
+  glm-5.2:
+    adapter: zai
+    native_model: glm-5.2
+    context_window: 200000             # TODO: confirm
+    default_max_tokens: 8192           # reasoning model: needs headroom
+  glm-4.7:
+    adapter: zai
+    native_model: glm-4.7
+    context_window: 200000             # TODO: confirm
+    default_max_tokens: 8192           # reasoning model: needs headroom
+
+  # ---- MiniMax (via headroom 8792 -> api.minimax.io) ----
   minimax-m3:
     adapter: minimax
-  local-gemma4:
+    context_window: 200000             # TODO: confirm
+    default_max_tokens: 8192
+
+  # ---- Local (Ollama / llama.cpp, OpenAI-compatible) ----
+  qwythos-9b:
     adapter: local
+    native_model: qwythos-9b           # TODO: set exact Ollama tag (e.g. richardyoung/qwythos-9b-abliterated)
+    context_window: 1000000            # TODO: confirm (YaRN-scaled)
+    default_max_tokens: 4096
+  gemma4-12b-agentic:
+    adapter: local
+    native_model: gemma4-12b-agentic   # TODO: set exact Ollama/llama.cpp tag
+    context_window: 32000              # TODO: confirm
+    default_max_tokens: 4096
 
 upstream:
   anthropic: http://127.0.0.1:8791
   minimax:   http://127.0.0.1:8792
   local:     http://127.0.0.1:11434/v1
+  # Direct Z.ai coding endpoint (verified working). Swap to a local Headroom
+  # instance (e.g. http://127.0.0.1:8793) for provider-side prefix-cache
+  # compression in front of Z.ai, keeping Headroom strictly as middleware.
+  zai:       https://api.z.ai/api/coding/paas/v4
 
 memory:
   enabled: true

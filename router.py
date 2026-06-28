@@ -157,6 +157,18 @@ def make_router(
                 detail=f"Adapter '{adapter_name}' not configured (missing upstream)",
             )
 
+        # -------- per-model registry overrides (Directive 2) --------
+        spec = registry.spec_for(model)
+        if spec is not None:
+            if getattr(spec, "native_model", None):
+                # Forward the provider's exact id while keeping `model` (the
+                # friendly name) for memory + metrics.
+                payload = {**payload, "model": spec.native_model}
+            if getattr(spec, "default_max_tokens", None) and "max_tokens" not in payload:
+                # Reasoning models exhaust short budgets on hidden reasoning
+                # tokens; supply headroom only when the client didn't specify.
+                payload = {**payload, "max_tokens": spec.default_max_tokens}
+
         # Session id: header x-ummg-session-id > payload.session_id > uuid4
         session_id = (
             request.headers.get("x-ummg-session-id")
@@ -192,7 +204,11 @@ def make_router(
             messages = [m for m in messages if m.get("role") != "system"]
             messages = [packet] + messages
         augmented = {**payload, "messages": messages}
-        augmented = ctx.truncate(augmented)
+        effective_ctx = settings.memory.max_context_tokens
+        if spec is not None and getattr(spec, "context_window", None):
+            # Never inject/keep more than the model can actually accept.
+            effective_ctx = min(effective_ctx, spec.context_window)
+        augmented = ctx.truncate(augmented, max_context_tokens=effective_ctx)
 
         # -------- adapter call --------
         is_stream = bool(augmented.get("stream", False))
