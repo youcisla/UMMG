@@ -25,6 +25,7 @@ from context import ContextManager
 from memory import MemoryCore
 from observability import LatencyTracker, RequestRecord
 from registry import ModelRegistry, UnknownModelError
+from trace import TraceRecorder
 
 log = logging.getLogger("ummg.router")
 
@@ -35,6 +36,7 @@ def make_router(
     registry: ModelRegistry,
     memory: MemoryCore,
     tracker: LatencyTracker,
+    recorder: TraceRecorder | None = None,
 ) -> APIRouter:
     router = APIRouter()
     ctx = ContextManager(max_context_tokens=settings.memory.max_context_tokens)
@@ -270,6 +272,20 @@ def make_router(
                                 tokens_in=None,
                                 tokens_out=None,
                             )
+                        if recorder is not None:
+                            recorder.record({
+                                "type": "chat.completion.stream",
+                                "session_id": session_id,
+                                "model": model,
+                                "adapter": adapter.name,
+                                "request": {
+                                    "messages": payload.get("messages"),
+                                    "max_tokens": payload.get("max_tokens"),
+                                    "temperature": payload.get("temperature"),
+                                },
+                                "response": {"content": assistant_text},
+                                "latency_ms": round(upstream_latency, 2),
+                            })
                         latency_ms = (time.perf_counter() - t0) * 1000.0
                         tracker.record(RequestRecord(
                             ts=time.time(),
@@ -339,6 +355,25 @@ def make_router(
                 )
             except Exception:
                 log.exception("memory post_routing failed")
+
+        if recorder is not None:
+            recorder.record({
+                "type": "chat.completion",
+                "session_id": session_id,
+                "model": model,
+                "adapter": adapter.name,
+                "request": {
+                    "messages": payload.get("messages"),
+                    "max_tokens": payload.get("max_tokens"),
+                    "temperature": payload.get("temperature"),
+                },
+                "response": {
+                    "content": assistant_text,
+                    "tokens_in": tokens_in,
+                    "tokens_out": tokens_out,
+                },
+                "latency_ms": round(upstream_latency, 2),
+            })
 
         latency_ms = (time.perf_counter() - t0) * 1000.0
         tracker.record(RequestRecord(

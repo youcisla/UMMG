@@ -9,3 +9,8 @@ faiss-cpu>=1.7
 aiosqlite>=0.19
 tiktoken>=0.5
 sentence-transformers>=2.2
+
+# --- Optional backends / integrations (install only when the feature is on) ---
+# lancedb>=0.33        # enables memory.vector_backend: lancedb (Directive 3)
+# pyarrow>=14          # lancedb dependency (schema); usually pulled automatically
+# teich                # tracing -> SFT dataset formatting (Directive 4); alpha, pin once confirmed

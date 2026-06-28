@@ -68,6 +68,12 @@ memory:
   enabled: true
   top_k: 6
   max_context_tokens: 8000
+  # Vector backend: 'faiss' (default, in-RAM) or 'lancedb' (disk-backed,
+  # scales beyond RAM). Flip to lancedb AFTER running
+  # scripts/migrate_faiss_to_lance.py so existing memory carries over.
+  vector_backend: faiss
+  lance_table: memory
+  lance_index_threshold: 512
   summary_every_n_events: 20
   summary_window: 30
   summary_model: claude-sonnet
@@ -76,3 +82,11 @@ memory:
     primary_model: text-embedding-3-small
     fallback: sentence-transformers
     fallback_model: all-MiniLM-L6-v2
+
+# Trace capture for distillation (Directive 4). Opt-in: when disabled the
+# recorder is a no-op with zero hot-path cost. Raw masked .jsonl is written to
+# <data_dir>/<dir>; Teich (if installed) formats it into an SFT dataset.
+tracing:
+  enabled: false
+  dir: traces
+  queue_max: 1000

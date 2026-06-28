@@ -44,6 +44,16 @@ class MemoryConfig:
     embedding_primary_model: str
     embedding_fallback: str
     embedding_fallback_model: str
+    vector_backend: str
+    lance_table: str
+    lance_index_threshold: int
+
+
+@dataclass(frozen=True)
+class TraceConfig:
+    enabled: bool
+    dir: str
+    queue_max: int
 
 
 @dataclass(frozen=True)
@@ -57,6 +67,7 @@ class Settings:
     upstream: dict[str, str]
     models: dict[str, ModelSpec]
     memory: MemoryConfig
+    tracing: TraceConfig
     data_dir: Path
 
 
@@ -127,6 +138,16 @@ def load_settings() -> Settings:
         embedding_primary_model=str(emb.get("primary_model", "text-embedding-3-small")),
         embedding_fallback=str(emb.get("fallback", "sentence-transformers")),
         embedding_fallback_model=str(emb.get("fallback_model", "all-MiniLM-L6-v2")),
+        vector_backend=str(mem_raw.get("vector_backend", "faiss")).lower(),
+        lance_table=str(mem_raw.get("lance_table", "memory")),
+        lance_index_threshold=int(mem_raw.get("lance_index_threshold", 512)),
+    )
+
+    tr_raw = raw.get("tracing") or {}
+    tracing = TraceConfig(
+        enabled=bool(tr_raw.get("enabled", False)),
+        dir=str(tr_raw.get("dir", "traces")),
+        queue_max=int(tr_raw.get("queue_max", 1000)),
     )
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -149,5 +170,6 @@ def load_settings() -> Settings:
         upstream=upstream,
         models=models,
         memory=memory,
+        tracing=tracing,
         data_dir=DATA_DIR,
     )

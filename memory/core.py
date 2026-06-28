@@ -47,11 +47,20 @@ class MemoryCore:
     async def init(self) -> None:
         await self.events.init()
         backend = await self.embedder.init()
-        self.store = VectorStore(
-            index_path=self.data_dir / "vectors.faiss",
-            payloads_path=self.data_dir / "vectors.payloads.json",
-            dim=backend.dim,
-        )
+        if self.cfg.vector_backend == "lancedb":
+            from .lance_store import LanceVectorStore
+            self.store = LanceVectorStore(
+                db_path=self.data_dir / "lance",
+                table=self.cfg.lance_table,
+                dim=backend.dim,
+                index_threshold=self.cfg.lance_index_threshold,
+            )
+        else:
+            self.store = VectorStore(
+                index_path=self.data_dir / "vectors.faiss",
+                payloads_path=self.data_dir / "vectors.payloads.json",
+                dim=backend.dim,
+            )
         self.store.init()
         self.retriever = Retriever(self.store, self.embedder, top_k=self.cfg.top_k)
         self.summarizer = SummarizerWorker(

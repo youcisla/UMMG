@@ -17,6 +17,7 @@ from memory import MemoryCore
 from observability import LatencyTracker
 from registry import ModelRegistry
 from router import make_router
+from trace import TraceRecorder
 
 
 @asynccontextmanager
@@ -33,15 +34,23 @@ async def lifespan(app: FastAPI):
     )
     await memory.init()
     tracker = LatencyTracker()
+    recorder = TraceRecorder(
+        settings.data_dir / settings.tracing.dir,
+        enabled=settings.tracing.enabled,
+        queue_max=settings.tracing.queue_max,
+    )
+    await recorder.start()
     app.state.registry = registry
     app.state.memory = memory
     app.state.tracker = tracker
+    app.state.recorder = recorder
 
     app.include_router(make_router(
         settings=settings,
         registry=registry,
         memory=memory,
         tracker=tracker,
+        recorder=recorder,
     ))
 
     log.info(
@@ -53,6 +62,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         log.info("ummg shutting down")
+        await recorder.stop()
         await memory.shutdown()
 
 
