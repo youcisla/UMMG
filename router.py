@@ -25,7 +25,7 @@ from context import ContextManager
 from memory import MemoryCore
 from observability import LatencyTracker, RequestRecord
 from registry import ModelRegistry, UnknownModelError
-from trace import TraceRecorder
+from tracelog import TraceRecorder
 
 log = logging.getLogger("ummg.router")
 

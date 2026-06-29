@@ -32,7 +32,11 @@ class MemoryCore:
                  anthropic_upstream: str, anthropic_api_key: str) -> None:
         self.cfg = cfg
         self.data_dir = data_dir
-        self.events = EventLog(data_dir / "events.db")
+        if cfg.vector_backend == "lancedb":
+            from .lance_events import LanceEventLog
+            self.events = LanceEventLog(data_dir / "lance", table="events")
+        else:
+            self.events = EventLog(data_dir / "events.db")
         self.embedder = Embedder(
             primary_base_url=cfg.embedding_primary_base_url,
             primary_model=cfg.embedding_primary_model,

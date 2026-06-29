@@ -17,7 +17,8 @@ from memory import MemoryCore
 from observability import LatencyTracker
 from registry import ModelRegistry
 from router import make_router
-from trace import TraceRecorder
+from tracelog import TraceRecorder
+from admin import make_admin_router
 
 
 @asynccontextmanager
@@ -51,6 +52,12 @@ async def lifespan(app: FastAPI):
         memory=memory,
         tracker=tracker,
         recorder=recorder,
+    ))
+    app.include_router(make_admin_router(
+        settings=settings,
+        registry=registry,
+        memory=memory,
+        tracker=tracker,
     ))
 
     log.info(

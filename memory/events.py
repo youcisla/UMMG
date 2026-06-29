@@ -118,6 +118,12 @@ class EventLog:
             row = await cur.fetchone()
         return int(row[0]) if row else 0
 
+    async def count_by_role(self, role: str) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute("SELECT COUNT(*) FROM events WHERE role=?", (role,))
+            row = await cur.fetchone()
+        return int(row[0]) if row else 0
+
     async def last_summary(self) -> dict[str, Any] | None:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row

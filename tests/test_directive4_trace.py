@@ -6,8 +6,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from trace import TraceRecorder, export_dataset, teich_available
-from trace.recorder import _mask
+from tracelog import TraceRecorder, export_dataset, teich_available
+from tracelog.recorder import _mask
 
 
 def test_mask_redacts_keys_and_values() -> None:

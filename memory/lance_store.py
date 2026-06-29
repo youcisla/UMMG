@@ -67,30 +67,30 @@ class LanceVectorStore:
             self.db_path.mkdir(parents=True, exist_ok=True)
             self._db = lancedb.connect(str(self.db_path))
 
+            schema = pa.schema(
+                [
+                    pa.field("vector", pa.list_(pa.float32(), self.dim)),
+                    pa.field("text", pa.string()),
+                    pa.field("role", pa.string()),
+                    pa.field("ts", pa.float64()),
+                    pa.field("session_id", pa.string()),
+                    pa.field("model", pa.string()),
+                    pa.field("adapter", pa.string()),
+                ]
+            )
+            # Race-safe acquisition: open if present, else create, else open.
             try:
-                existing_tables = list(self._db.list_tables())
-            except AttributeError:  # older lancedb
-                existing_tables = list(self._db.table_names())
-            if self.table_name in existing_tables:
                 self._tbl = self._db.open_table(self.table_name)
-                existing_dim = self._table_vector_dim(self._tbl)
-                if existing_dim is not None and existing_dim != self.dim:
-                    raise ValueError(
-                        f"LanceDB dim mismatch: table={existing_dim}, expected={self.dim}"
-                    )
-            else:
-                schema = pa.schema(
-                    [
-                        pa.field("vector", pa.list_(pa.float32(), self.dim)),
-                        pa.field("text", pa.string()),
-                        pa.field("role", pa.string()),
-                        pa.field("ts", pa.float64()),
-                        pa.field("session_id", pa.string()),
-                        pa.field("model", pa.string()),
-                        pa.field("adapter", pa.string()),
-                    ]
+            except Exception:  # noqa: BLE001 - table likely doesn't exist yet
+                try:
+                    self._tbl = self._db.create_table(self.table_name, schema=schema)
+                except Exception:  # noqa: BLE001 - lost create race; open instead
+                    self._tbl = self._db.open_table(self.table_name)
+            existing_dim = self._table_vector_dim(self._tbl)
+            if existing_dim is not None and existing_dim != self.dim:
+                raise ValueError(
+                    f"LanceDB dim mismatch: table={existing_dim}, expected={self.dim}"
                 )
-                self._tbl = self._db.create_table(self.table_name, schema=schema)
             # An existing, sufficiently large table may already carry an index.
             self._indexed = self.size() >= self.index_threshold
 

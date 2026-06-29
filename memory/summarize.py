@@ -102,11 +102,8 @@ class SummarizerWorker:
         return True
 
     async def _count_assistant(self) -> int:
-        import aiosqlite
-        async with aiosqlite.connect(self.events.db_path) as db:
-            cur = await db.execute("SELECT COUNT(*) FROM events WHERE role='assistant'")
-            row = await cur.fetchone()
-        return int(row[0]) if row else 0
+        # Backend-agnostic: works for both SQLite and LanceDB ledgers.
+        return await self.events.count_by_role("assistant")
 
     def _format_transcript(self, rows: list[dict[str, Any]]) -> str:
         lines: list[str] = []
