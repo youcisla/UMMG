@@ -79,6 +79,16 @@
   <div class="cards" id="cards"></div>
 
   <div class="panel">
+    <h2>Available models <span class="muted small">(advertised via /v1/models)</span></h2>
+    <div class="body" style="padding:0;">
+      <table id="modelsTable">
+        <thead><tr><th>model id</th><th>adapter</th><th>reachability</th><th>Claude Code launch</th></tr></thead>
+        <tbody><tr><td colspan="4" class="muted" style="padding:14px;">connect to load models</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
     <h2>Memory search</h2>
     <div class="body">
       <div class="searchrow">
@@ -115,6 +125,31 @@ const $ = s => document.querySelector(s);
 let TOKEN = localStorage.getItem("ummg_token") || "";
 $("#token").value = TOKEN;
 let timer = null;
+
+// Tiny per-model reachability ping. Returns a map of model id -> status.
+async function probeModels(ids){
+  const out = {};
+  for (const id of ids) {
+    try {
+      const r = await fetch("/v1/chat/completions", {
+        method: "POST",
+        headers: hdr(),
+        body: JSON.stringify({ model: id, messages: [{ role: "user", content: "ping" }], max_tokens: 1, stream: false })
+      });
+      if (r.ok) out[id] = { ok: true };
+      else {
+        const txt = await r.text();
+        let reason = r.status + " error";
+        if (/credit|balance/i.test(txt)) reason = "Anthropic: API credit balance too low";
+        else if (/not found|404/i.test(txt)) reason = "upstream model not installed";
+        else if (/auth|401/i.test(txt)) reason = "key missing or invalid for this provider";
+        else reason = r.status + " " + txt.slice(0, 80);
+        out[id] = { ok: false, reason };
+      }
+    } catch(e){ out[id] = { ok: false, reason: "network" }; }
+  }
+  return out;
+}
 
 function hdr() { return { "Authorization": "Bearer " + TOKEN, "Content-Type": "application/json" }; }
 function banner(msg) { const b=$("#banner"); if(!msg){b.style.display="none";return;} b.textContent=msg; b.style.display="block"; }
@@ -206,8 +241,46 @@ async function loadTraces(){
 async function refreshAll(){
   if(!TOKEN){ banner("Enter your gateway bearer token and click Connect."); return; }
   await loadHealth();
-  try { await loadOverview(); await loadEvents(); await loadTraces(); }
+  try { await loadOverview(); await loadEvents(); await loadTraces(); await loadModels(); }
   catch(e){ banner(e.message); }
+}
+
+async function loadModels(){
+  let models, overview;
+  try { models = await api("/v1/models"); overview = await api("/v1/admin/overview"); }
+  catch(e){ return; }
+  const ids = (models.data || []).map(m => m.id);
+  const tb = $("#modelsTable tbody");
+  tb.innerHTML = `<tr><td colspan="4" class="muted" style="padding:14px;">probing ${ids.length} models…</td></tr>`;
+  const status = await probeModels(ids);
+
+  // Infer adapter per model via upstream membership + per-adapter list (cheap heuristic).
+  const outByName = {};
+  try {
+    const detail = await api("/v1/admin/overview");
+    // overview doesn't carry the per-model -> adapter mapping; use prefix heuristics.
+  } catch {}
+  const adapterGuess = id => {
+    if (id.startsWith("claude-") || id === "claude-fable-5") return "anthropic";
+    if (id.startsWith("glm-")) return "zai";
+    if (id.startsWith("minimax-")) return "minimax";
+    if (id.startsWith("local-") || id === "qwythos-9b" || id === "gemma4-12b-agentic") return "local";
+    return "—";
+  };
+
+  tb.innerHTML = ids.map(id => {
+    const s = status[id] || { ok: false, reason: "?" };
+    const dot = `<span class="dot ${s.ok ? 'ok' : 'err'}"></span>`;
+    const stat = s.ok ? `${dot}<span class="small">reachable</span>`
+                     : `${dot}<span class="small" title="${esc(s.reason || '')}">${esc(s.reason || 'unreachable')}</span>`;
+    const launch = `claude --model ${id}`;
+    return `<tr>
+      <td class="mono">${esc(id)}</td>
+      <td>${chip(adapterGuess(id))}</td>
+      <td>${stat}</td>
+      <td class="mono small muted">${esc(launch)}</td>
+    </tr>`;
+  }).join("");
 }
 
 async function doSearch(){

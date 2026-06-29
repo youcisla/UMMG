@@ -163,11 +163,28 @@ class AnthropicAdapter:
     def __init__(self, base_url: str, api_key: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        # OAuth (Pro subscription) tokens start with sk-ant-oat01- and use
+        # Authorization: Bearer. API keys start with sk-ant-api03- and use
+        # x-api-key. The Anthropic API rejects mismatched headers, so pick
+        # the correct one based on the prefix.
+        self._use_oauth = bool(api_key) and api_key.startswith("sk-ant-oat")
 
     def _headers(self, stream: bool = False) -> dict[str, str]:
-        h = {"Content-Type": "application/json"}
+        h = {
+            "Content-Type": "application/json",
+            # Anthropic Messages API requires this version header on every
+            # call — easy to forget when forwarding through headroom.
+            "anthropic-version": "2023-06-01",
+        }
         if self.api_key:
-            h["x-api-key"] = self.api_key
+            if self._use_oauth:
+                # Pro / OAuth: Anthropic expects Authorization: Bearer <token>.
+                # The token (sk-ant-oat01-…) is what the Claude Code CLI sends
+                # when it's running under a Pro/AI-subscription login.
+                h["Authorization"] = f"Bearer {self.api_key}"
+            else:
+                # API key: traditional x-api-key header.
+                h["x-api-key"] = self.api_key
         if stream:
             h["Accept"] = "text/event-stream"
         return h

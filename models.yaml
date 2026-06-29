@@ -59,9 +59,9 @@ upstream:
   anthropic: http://127.0.0.1:8791
   minimax:   http://127.0.0.1:8792
   local:     http://127.0.0.1:11434/v1
-  # Direct Z.ai coding endpoint (verified working). Swap to a local Headroom
-  # instance (e.g. http://127.0.0.1:8793) for provider-side prefix-cache
-  # compression in front of Z.ai, keeping Headroom strictly as middleware.
+  # Direct Z.ai coding endpoint. Z.ai exposes /chat/completions under /v4
+  # (no /v1 segment, unlike OpenAI/MiniMax), so headroom's openai backend
+  # would double the path. Direct HTTPS is correct here.
   zai:       https://api.z.ai/api/coding/paas/v4
 
 memory:
@@ -74,7 +74,7 @@ memory:
   vector_backend: faiss
   lance_table: memory
   lance_index_threshold: 512
-  summary_every_n_events: 20
+  summary_every_n_events: 50
   summary_window: 30
   summary_model: claude-sonnet
   embedding:

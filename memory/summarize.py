@@ -47,9 +47,20 @@ class SummarizerWorker:
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
         self._last_summary_at_count = 0
-        self._poll_seconds = 5.0
+        # Default 5s poll is far too aggressive: it watches the assistant-event
+        # counter and calls claude-sonnet every time the counter crosses
+        # `every_n`, spending real tokens. Bump to 5 minutes by default.
+        # Set UMMG_SUMMARIZER_POLL_SECONDS=N to override.
+        import os as _os
+        self._poll_seconds = float(_os.getenv("UMMG_SUMMARIZER_POLL_SECONDS", "300"))
+        # Also allow the operator to disable summarization entirely without
+        # editing models.yaml.
+        self._enabled = _os.getenv("UMMG_SUMMARIZER_DISABLED", "").strip().lower() not in ("1", "true", "yes")
 
     async def start(self) -> None:
+        if not self._enabled:
+            log.warning("summarizer disabled via UMMG_SUMMARIZER_DISABLED")
+            return
         if self._task is None:
             self._task = asyncio.create_task(self._run(), name="ummg-summarizer")
 
@@ -130,9 +141,17 @@ class SummarizerWorker:
             "temperature": 0.2,
             "stream": False,
         }
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+        }
         if self.anthropic_api_key:
-            headers["x-api-key"] = self.anthropic_api_key
+            # OAuth (Pro subscription) tokens must use Authorization: Bearer.
+            # API keys continue to use x-api-key. Detect by prefix.
+            if self.anthropic_api_key.startswith("sk-ant-oat"):
+                headers["Authorization"] = f"Bearer {self.anthropic_api_key}"
+            else:
+                headers["x-api-key"] = self.anthropic_api_key
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 r = await client.post(
